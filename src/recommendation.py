@@ -10,7 +10,7 @@ from sentence_transformers import SentenceTransformer
 
 class RecommendationSystem:
     """
-    A class for generating product recommendations based on sentiment and cosine distance of reviews.
+    A class for generating product recommendations based on sentiment and cosine similarity of reviews.
     """
 
     def __init__(self, model_name: str, device: torch.device, df: pd.DataFrame) -> None:
@@ -29,7 +29,7 @@ class RecommendationSystem:
         self.df = df
         self.text = df["text"].to_list()
 
-    def encode(self, batch_size: int = 16):
+    def encode(self, batch_size: int = 16) -> None:
         """
         Encodes review text into embeddings and creates a FAISS index for similarity search.
 
@@ -64,7 +64,7 @@ class RecommendationSystem:
 
     def recommend(self, k: int = 200) -> pd.DataFrame:
         """
-        Recommends products to users based on the cosine distance between their reviews and other reviews.
+        Recommends products to users based on the cosine similarity between their reviews and other reviews.
 
         Args:
             k (int): The number of candidate reviews to retrieve per user.
@@ -91,18 +91,18 @@ class RecommendationSystem:
             top_reviews = self.df.iloc[indices[0]]
             top_reviews = top_reviews.copy()
 
-            top_reviews["cosine_distance"] = 1 - coefficients.flatten()
+            top_reviews["cosine_similarity"] = coefficients.flatten()
 
             top_reviews = top_reviews[
                 ~top_reviews["product_id"].isin(purchased_products)
             ]
             top_reviews["ranking_score"] = (
-                top_reviews["sentiment_score"] * top_reviews["cosine_distance"]
+                top_reviews["sentiment_score"] * (1 + top_reviews["cosine_similarity"])
             )
 
             product_scores = top_reviews.groupby(by="product_id")["ranking_score"].sum()
 
-            best_product = product_scores.idxmin() if not product_scores.empty else None
+            best_product = product_scores.idxmax() if not product_scores.empty else None
 
             sel_product_revs = top_reviews[top_reviews["product_id"] == best_product]
 
@@ -110,14 +110,14 @@ class RecommendationSystem:
                 sel_product_revs["sentiment"] == "POSITIVE"
             ]
             positive_revs = positive_revs.sort_values(
-                by="cosine_distance", ascending=True
+                by="cosine_similarity", ascending=False
             )
 
             negative_revs = sel_product_revs[
                 sel_product_revs["sentiment"] == "NEGATIVE"
             ]
             negative_revs = negative_revs.sort_values(
-                by="cosine_distance", ascending=True
+                by="cosine_similarity", ascending=False
             )
 
             selected_revs = positive_revs.head(3)
@@ -131,7 +131,7 @@ class RecommendationSystem:
             recommondations[user] = {
                 "recommendation": best_product,
                 "similar_id": selected_revs.index.to_list(),
-                "similar_val": selected_revs["cosine_distance"].values,
+                "similar_val": selected_revs["cosine_similarity"].values,
             }
 
         recommendation_df = pd.DataFrame.from_dict(recommondations, orient="index")
