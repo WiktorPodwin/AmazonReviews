@@ -1,3 +1,7 @@
+# Exclude files that stores temporary results for model processing
+data/sentiment.csv
+data/recommendation.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
